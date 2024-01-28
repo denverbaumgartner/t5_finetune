@@ -1,3 +1,4 @@
+# train.py
 import socket
 from collections import OrderedDict
 from pathlib import Path
@@ -17,23 +18,24 @@ from transformers import (
 )
 
 import util
+from data import SynthData
 
 # Configuration details. These could be passed as command line arguments but are done this way
 # for simplicity.
-kname = "<name>"
+kname = "spider_synthetic_joint"
 comment=\
     """
-    <Add any comments here that you want to see in your run>
+    Spider Dataset: Small Subset: Synthetic Joint
     """
 
 k_save_dir = "./save"
-k_data_dir = "fill me in"
+k_data_dir = "./data"
 # Note, the global var record_dir is used for actual saves
 
 k_epochs = 100      # usual 200
-k_model="t5-small"   # usual t5-small; could also be t5-base, t5-large, etc. But as written we support only T5
-                     # to handle a different model type, change the code in main, but you might also need to change
-                     # calls to forward, label config, etc.
+k_model="mrm8488/t5-base-finetuned-wikiSQL"     # usual t5-small; could also be t5-base, t5-large, etc. But as written we support only T5
+                                                # to handle a different model type, change the code in main, but you might also need to change
+                                                # calls to forward, label config, etc.
 
 # optim / sched
 k_lr = 1e-4         # 1e-4 to 1e-5
@@ -45,14 +47,14 @@ k_max_grad_norm =  1.0
 k_num_train = -1      # -1 is use all
 k_num_val = -1
 k_batch_size = 16
-k_num_workers = 4     # num of workers for dataloader
+k_num_workers = 1     # num of workers for dataloader
 
 k_use_wandb = False # whether to log to wandb (you'll need to set up wandb env info)
 
 # source and target lengths for dataloader. If you know your lengths you can change these, or
 # add a collate function to handle different sizes. Depending on your inputs you should change these.
-k_max_src_len = 100
-k_max_tgt_len = 20
+k_max_src_len = 512
+k_max_tgt_len = 512
 
 k_seed = 42
 
@@ -77,7 +79,8 @@ all_config = {
 # A dataset for our inputs.
 class T5DataSet(Dataset):
     def __init__(self, tokenizer, data_dir: str, type_path, max_examples=-1,
-                 max_src_len=200, max_tgt_len=200):
+                 max_src_len=200, max_tgt_len=200, dataset='semiotic/spider_dataset_tuning',
+                 data_type='synthetic_joint'):
         """
         max_examples: if > 0 then will load only max_examples into the dataset; -1 means use all
 
@@ -87,6 +90,11 @@ class T5DataSet(Dataset):
 
         valid_type_paths = ["test", "train", "val"]
         assert type_path in valid_type_paths, f"Type path must be one of {valid_type_paths}"
+
+        # Prepare the data
+        self.sd = SynthData()
+        self.sd.prepare_sources(
+            subset=type_path, type=data_type, data_dir=data_dir)
 
         self.example_path = Path(data_dir) / type_path
         self.max_examples = max_examples
