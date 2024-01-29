@@ -22,10 +22,10 @@ from data import SynthData
 
 # Configuration details. These could be passed as command line arguments but are done this way
 # for simplicity.
-kname = "synthetic_question"
+kname = "synthetic_query"
 comment=\
     """
-    Spider Dataset: Small Subset: Synthetic Question 
+    Spider Dataset: Small Subset: Synthetic Query 
     """
 
 k_save_dir = "./save"
@@ -55,11 +55,14 @@ k_save_ckpt_rate = 2
 k_save_ckpt = True
 
 # dataset details 
-k_data_type = "synthetic_question"   # type of data generation pattern or group to be used for tuning
+k_data_type = "synthetic_query"   # type of data generation pattern or group to be used for tuning
+k_test_data_type = "spider_original"
     # "question": "synthetic_question",
     # "query": "synthetic_query", 
     # "joint": "synthetic_joint", 
     # "spider": "spider_original"
+k_data_object_name = 'semiotic/spider_dataset_tuning'
+k_data_object = SynthData(dataset=k_data_object_name)
                             
 
 k_use_wandb = False # whether to log to wandb (you'll need to set up wandb env info)
@@ -92,7 +95,7 @@ all_config = {
 # A dataset for our inputs.
 class T5DataSet(Dataset):
     def __init__(self, tokenizer, data_dir: str, type_path, max_examples=-1,
-                 max_src_len=200, max_tgt_len=200, dataset='semiotic/spider_dataset_tuning',
+                 max_src_len=200, max_tgt_len=200, data_object=k_data_object,
                  data_type='synthetic_joint'):
         """
         max_examples: if > 0 then will load only max_examples into the dataset; -1 means use all
@@ -201,12 +204,12 @@ def get_dataloaders(tokenizer, batch_size, num_train, num_val, data_dir, num_wor
 
     """
     # todo: should pass max src and max tgt len in as arguments
-    train_data_set = T5DataSet(tokenizer, type_path="train", data_dir=data_dir, max_examples=num_train,
-                               max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len, data_type=k_data_type)
+    train_data_set = T5DataSet(tokenizer, type_path="train", data_dir=data_dir, max_examples=num_train, 
+                               max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len, data_object=k_data_object, data_type=k_data_type)
     eval_data_set = T5DataSet(tokenizer, type_path="val", data_dir=data_dir, max_examples=num_val,
-                              max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len, data_type=k_data_type)
-    test_data_set = T5DataSet(tokenizer, type_path="val", data_dir=data_dir, max_examples=num_val,
-                              max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len, data_type=k_data_type)
+                              max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len, data_object=k_data_object, data_type=k_data_type)
+    test_data_set = T5DataSet(tokenizer, type_path="test", data_dir=data_dir, max_examples=num_val,
+                              max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len, data_object=k_data_object, data_type=k_test_data_type)
     train_loader = DataLoader(train_data_set, batch_size=batch_size, shuffle=shuffle_train, num_workers=num_workers)
     eval_loader = DataLoader(eval_data_set, batch_size=batch_size, shuffle=shuffle_dev, num_workers=num_workers)
     test_loader = DataLoader(test_data_set, batch_size=batch_size, shuffle=shuffle_dev, num_workers=num_workers)
@@ -238,6 +241,13 @@ def main():
 
     model = T5ForConditionalGeneration.from_pretrained(k_model)
     tokenizer = T5Tokenizer.from_pretrained(k_model)
+
+    # update the tokenizer and embeddings for new tokens 
+    unks = k_data_object.get_all_unk_tokens(tokenizer)
+    new_tokens = set(unks) - set(tokenizer.get_vocab().keys())
+    tokenizer.add_tokens(list(new_tokens))
+    model.resize_token_embeddings(len(tokenizer))
+    log.info(f'updated tokenizer with {len(new_tokens)} new tokens')
 
     # modify the prediction length
     model.config.max_length = 512
