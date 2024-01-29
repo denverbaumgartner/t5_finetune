@@ -31,6 +31,7 @@ comment=\
 k_save_dir = "./save"
 k_data_dir = "./data"
 k_ckpt_dir = './model'
+k_tknz_dir = './tokenizer'
 # Note, the global var record_dir is used for actual saves
 
 k_epochs = 50      # usual 200
@@ -248,6 +249,10 @@ def main():
     tokenizer.add_tokens(list(new_tokens))
     model.resize_token_embeddings(len(tokenizer))
     log.info(f'updated tokenizer with {len(new_tokens)} new tokens')
+
+    # save the updated tokenizer 
+    tknz_save_dir = util.get_save_dir(k_tknz_dir, kname)
+    tokenizer.save_pretrained(tknz_save_dir)
 
     # modify the prediction length
     model.config.max_length = 512
