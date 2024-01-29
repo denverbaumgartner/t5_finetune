@@ -31,3 +31,27 @@ class SynthData:
                 open(f'{data_dir}/{subset}.target', 'a') as f_target:
                 f_source.write(self.format_request(row['question'], row['schema']) + '\n')
                 f_target.write(row['query'] + ' </s>\n')
+
+    def get_unk_tokens(self, tokenizer, value): 
+        unk_tokens = []
+        tokens = set(tokenizer.tokenize(value))
+        for token in tokens: 
+            if tokenizer.convert_tokens_to_ids(token) == tokenizer.unk_token_id: 
+                unk_tokens.append(token)
+        return unk_tokens
+
+    def get_dataset_unk_tokens(self, tokenizer, dataset): 
+        unk_tokens = []
+        for i, row in enumerate(dataset): 
+            text = self.format_request(row['question'], row['schema']) + ' ' + row['query']
+            unks = self.get_unk_tokens(tokenizer, text)
+            unk_tokens.extend(unks)
+        return list(set(unk_tokens))
+
+    def get_all_unk_tokens(self, tokenizer): 
+        unk_tokens = []
+        unk_tokens.extend(self.get_dataset_unk_tokens(tokenizer, self.data['train']))
+        unk_tokens.extend(self.get_dataset_unk_tokens(tokenizer, self.data['val']))
+        unk_tokens.extend(self.get_dataset_unk_tokens(tokenizer, self.data['test']))
+        return list(set(unk_tokens))
+        

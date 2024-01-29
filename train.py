@@ -22,10 +22,10 @@ from data import SynthData
 
 # Configuration details. These could be passed as command line arguments but are done this way
 # for simplicity.
-kname = "synthetic_query"
+kname = "synthetic_question"
 comment=\
     """
-    Spider Dataset: Small Subset: Synthetic Joint
+    Spider Dataset: Small Subset: Synthetic Question 
     """
 
 k_save_dir = "./save"
@@ -33,7 +33,7 @@ k_data_dir = "./data"
 k_ckpt_dir = './model'
 # Note, the global var record_dir is used for actual saves
 
-k_epochs = 100      # usual 200
+k_epochs = 50      # usual 200
 k_model="mrm8488/t5-base-finetuned-wikiSQL"     # usual t5-small; could also be t5-base, t5-large, etc. But as written we support only T5
                                                 # to handle a different model type, change the code in main, but you might also need to change
                                                 # calls to forward, label config, etc.
@@ -51,11 +51,11 @@ k_batch_size = 8
 k_num_workers = 4     # num of workers for dataloader
 
 # checkpointing
-k_save_ckpt_rate = 1
+k_save_ckpt_rate = 2
 k_save_ckpt = True
 
 # dataset details 
-k_data_type = "synthetic_query"   # type of data generation pattern or group to be used for tuning
+k_data_type = "synthetic_question"   # type of data generation pattern or group to be used for tuning
     # "question": "synthetic_question",
     # "query": "synthetic_query", 
     # "joint": "synthetic_joint", 
@@ -212,7 +212,7 @@ def get_dataloaders(tokenizer, batch_size, num_train, num_val, data_dir, num_wor
     test_loader = DataLoader(test_data_set, batch_size=batch_size, shuffle=shuffle_dev, num_workers=num_workers)
     log.info(f'Datasets loaded with sizes: train: {len(train_data_set)}, dev: {len(eval_data_set)}')
 
-    return train_loader, eval_loader
+    return train_loader, eval_loader, test_loader
 
 
 def forward(model, device, batch):
@@ -232,30 +232,6 @@ def forward(model, device, batch):
     loss, logits = out_dict['loss'], out_dict['logits']
     return loss, logits
 
-def predict_and_save(data_loader): 
-    log.info("Running test set predictions")
-    model.eval() # make sure the model is in eval mode
-
-    pred_list_all = []                      # accumulate for saving; list; one list per epoch
-
-    # set up two count variables
-    total_matches_no_eos_ct = 0
-    total_matches_with_eos_ct = 0
-
-    with torch.no_grad(), \
-            tqdm(total=num_val) as progress_bar:
-        for batch_num, batch in enumerate(dev_loader):
-            batch_size = len(batch["source_ids"])
-
-            # predict / generate for token matches
-            src_ids = batch["source_ids"].to(device, dtype=torch.long)
-            src_mask = batch["source_mask"].to(device, dtype=torch.long)
-            tgt_ids = batch["target_ids"].to(device, dtype=torch.long)
-            # note you could tweak the generation params. See huggingface details for generate
-            generated_ids = model.generate(src_ids, attention_mask=src_mask)       # (batch x seq length)`
-
-
-
 def main():
     util.set_seed(k_seed)
     device, gpu_ids = util.get_available_devices()
@@ -266,7 +242,7 @@ def main():
     # modify the prediction length
     model.config.max_length = 512
 
-    train_loader, dev_loader = \
+    train_loader, dev_loader, test_loader = \
         get_dataloaders(tokenizer, batch_size=k_batch_size, num_train=k_num_train, num_val=k_num_val,
                         data_dir=k_data_dir, num_workers=k_num_workers)
 
