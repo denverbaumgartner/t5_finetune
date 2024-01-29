@@ -22,7 +22,7 @@ from data import SynthData
 
 # Configuration details. These could be passed as command line arguments but are done this way
 # for simplicity.
-kname = "spider_synthetic_joint"
+kname = "synthetic_query"
 comment=\
     """
     Spider Dataset: Small Subset: Synthetic Joint
@@ -30,6 +30,7 @@ comment=\
 
 k_save_dir = "./save"
 k_data_dir = "./data"
+k_ckpt_dir = './model'
 # Note, the global var record_dir is used for actual saves
 
 k_epochs = 100      # usual 200
@@ -46,8 +47,20 @@ k_max_grad_norm =  1.0
 # config info
 k_num_train = -1      # -1 is use all
 k_num_val = -1
-k_batch_size = 16
-k_num_workers = 1     # num of workers for dataloader
+k_batch_size = 8
+k_num_workers = 4     # num of workers for dataloader
+
+# checkpointing
+k_save_ckpt_rate = 1
+k_save_ckpt = True
+
+# dataset details 
+k_data_type = "synthetic_query"   # type of data generation pattern or group to be used for tuning
+    # "question": "synthetic_question",
+    # "query": "synthetic_query", 
+    # "joint": "synthetic_joint", 
+    # "spider": "spider_original"
+                            
 
 k_use_wandb = False # whether to log to wandb (you'll need to set up wandb env info)
 
@@ -189,11 +202,14 @@ def get_dataloaders(tokenizer, batch_size, num_train, num_val, data_dir, num_wor
     """
     # todo: should pass max src and max tgt len in as arguments
     train_data_set = T5DataSet(tokenizer, type_path="train", data_dir=data_dir, max_examples=num_train,
-                               max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len)
+                               max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len, data_type=k_data_type)
     eval_data_set = T5DataSet(tokenizer, type_path="val", data_dir=data_dir, max_examples=num_val,
-                              max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len)
+                              max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len, data_type=k_data_type)
+    test_data_set = T5DataSet(tokenizer, type_path="val", data_dir=data_dir, max_examples=num_val,
+                              max_src_len=k_max_src_len, max_tgt_len=k_max_tgt_len, data_type=k_data_type)
     train_loader = DataLoader(train_data_set, batch_size=batch_size, shuffle=shuffle_train, num_workers=num_workers)
     eval_loader = DataLoader(eval_data_set, batch_size=batch_size, shuffle=shuffle_dev, num_workers=num_workers)
+    test_loader = DataLoader(test_data_set, batch_size=batch_size, shuffle=shuffle_dev, num_workers=num_workers)
     log.info(f'Datasets loaded with sizes: train: {len(train_data_set)}, dev: {len(eval_data_set)}')
 
     return train_loader, eval_loader
@@ -216,6 +232,27 @@ def forward(model, device, batch):
     loss, logits = out_dict['loss'], out_dict['logits']
     return loss, logits
 
+def predict_and_save(data_loader): 
+    log.info("Running test set predictions")
+    model.eval() # make sure the model is in eval mode
+
+    pred_list_all = []                      # accumulate for saving; list; one list per epoch
+
+    # set up two count variables
+    total_matches_no_eos_ct = 0
+    total_matches_with_eos_ct = 0
+
+    with torch.no_grad(), \
+            tqdm(total=num_val) as progress_bar:
+        for batch_num, batch in enumerate(dev_loader):
+            batch_size = len(batch["source_ids"])
+
+            # predict / generate for token matches
+            src_ids = batch["source_ids"].to(device, dtype=torch.long)
+            src_mask = batch["source_mask"].to(device, dtype=torch.long)
+            tgt_ids = batch["target_ids"].to(device, dtype=torch.long)
+            # note you could tweak the generation params. See huggingface details for generate
+            generated_ids = model.generate(src_ids, attention_mask=src_mask)       # (batch x seq length)`
 
 
 
@@ -225,6 +262,9 @@ def main():
 
     model = T5ForConditionalGeneration.from_pretrained(k_model)
     tokenizer = T5Tokenizer.from_pretrained(k_model)
+
+    # modify the prediction length
+    model.config.max_length = 512
 
     train_loader, dev_loader = \
         get_dataloaders(tokenizer, batch_size=k_batch_size, num_train=k_num_train, num_val=k_num_val,
@@ -342,8 +382,15 @@ def main():
                 progress_bar.set_postfix(NLL=loss_meter.avg)
 
         # save predictions for qualititative analysis
-        util.save_preds(pred_list_all, record_dir)
-        util.save_preds(pred_list_correct, record_dir, file_name="preds_correct.csv")
+        try:
+            util.save_preds(pred_list_all, record_dir)
+        except Exception as e: 
+            log.info(f"error saving predictions {e}")
+        try: 
+            util.save_preds(pred_list_correct, record_dir, file_name="preds_correct.csv")
+        except: 
+            log.info(f"error saving predictions {e}")
+
         results_list = [('NLL', loss_meter.avg),
                         ('exact_match_with_eos', total_matches_with_eos_ct),
                         ('exact_match_no_eos', total_matches_no_eos_ct)]
@@ -362,6 +409,12 @@ def main():
                        split='dev',
                        num_visuals=3)
 
+        # Save to checkpoint
+        if epoch % k_save_ckpt_rate == 0: 
+            print("checkpointing!")
+            log.info(f'Checkpointing {kname} at epoch: {epoch}')
+            ckpt_save_dir = util.get_save_dir(k_ckpt_dir, kname, k_save_ckpt_rate)
+            model.save_pretrained(ckpt_save_dir, from_pt=True)
 
 if __name__ == '__main__':
     name = kname

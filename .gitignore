@@ -181,3 +181,4 @@ TODO.md
 *.arrow
 data/
 save/
+model/

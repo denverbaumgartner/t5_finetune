@@ -13,7 +13,7 @@ import tqdm
 # todo: fix logging in this file
 
 
-def get_save_dir(base_dir, name):
+def get_save_dir(base_dir, name, rate=1):
     """
     Args:
         base_dir (str): Base directory in which to make save directories.
@@ -30,7 +30,7 @@ def get_save_dir(base_dir, name):
     else:       # increment from the last one
         last = match_dirs[-1]
         r = re.match(".*-(\d\d)", last)
-        next_num = int(r.group(1)) + 1
+        next_num = int(r.group(1)) + rate
 
         unused_dir = base_path + f'-{next_num:02d}'
 
