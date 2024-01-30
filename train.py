@@ -22,10 +22,10 @@ from data import SynthData
 
 # Configuration details. These could be passed as command line arguments but are done this way
 # for simplicity.
-kname = "synthetic_query"
+kname = "synthetic_joint"
 comment=\
     """
-    Spider Dataset: Small Subset: Synthetic Query 
+    Spider Dataset: Small Subset: Synthetic Joint
     """
 
 k_save_dir = "./save"
@@ -56,7 +56,7 @@ k_save_ckpt_rate = 2
 k_save_ckpt = True
 
 # dataset details 
-k_data_type = "synthetic_query"   # type of data generation pattern or group to be used for tuning
+k_data_type = "synthetic_joint"   # type of data generation pattern or group to be used for tuning
 k_test_data_type = "spider_original"
     # "question": "synthetic_question",
     # "query": "synthetic_query", 
