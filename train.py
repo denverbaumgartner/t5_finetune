@@ -28,19 +28,19 @@ comment=\
     Spider Dataset: Small Subset: Synthetic Joint
     """
 
-k_save_dir = "./save"
+k_save_dir = "./save/spider_tuning_run_01"
 k_data_dir = "./data"
-k_ckpt_dir = './model'
-k_tknz_dir = './tokenizer'
+k_ckpt_dir = './model/spider_tuning_run_01'
+k_tknz_dir = './tokenizer/spider_tuning_run_01'
 # Note, the global var record_dir is used for actual saves
 
 k_epochs = 50      # usual 200
-k_model="mrm8488/t5-base-finetuned-wikiSQL"     # usual t5-small; could also be t5-base, t5-large, etc. But as written we support only T5
+k_model="google/t5-large-lm-adapt"     # usual t5-small; could also be t5-base, t5-large, etc. But as written we support only T5
                                                 # to handle a different model type, change the code in main, but you might also need to change
                                                 # calls to forward, label config, etc.
 
 # optim / sched
-k_lr = 1e-4         # 1e-4 to 1e-5
+k_lr = 5e-5         # 1e-4 to 1e-5 5e-5
 k_adam_eps = 1e-8
 k_warmup_steps = 0
 k_max_grad_norm =  1.0
@@ -48,7 +48,7 @@ k_max_grad_norm =  1.0
 # config info
 k_num_train = -1      # -1 is use all
 k_num_val = -1
-k_batch_size = 8
+k_batch_size = 1
 k_num_workers = 4     # num of workers for dataloader
 
 # checkpointing
@@ -64,14 +64,15 @@ k_test_data_type = "spider_original"
     # "spider": "spider_original"
 k_data_object_name = 'semiotic/spider_dataset_tuning'
 k_data_object = SynthData(dataset=k_data_object_name)
+k_spec_tokens = ['[SEP]']
                             
 
 k_use_wandb = False # whether to log to wandb (you'll need to set up wandb env info)
 
 # source and target lengths for dataloader. If you know your lengths you can change these, or
 # add a collate function to handle different sizes. Depending on your inputs you should change these.
-k_max_src_len = 512
-k_max_tgt_len = 512
+k_max_src_len = 1024
+k_max_tgt_len = 1024
 
 k_seed = 42
 
@@ -245,7 +246,7 @@ def main():
 
     # update the tokenizer and embeddings for new tokens 
     unks = k_data_object.get_all_unk_tokens(tokenizer)
-    new_tokens = set(unks) - set(tokenizer.get_vocab().keys())
+    new_tokens = set(k_spec_tokens) | set(unks) - set(tokenizer.get_vocab().keys())
     tokenizer.add_tokens(list(new_tokens))
     model.resize_token_embeddings(len(tokenizer))
     log.info(f'updated tokenizer with {len(new_tokens)} new tokens')
